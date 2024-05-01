@@ -275,7 +275,7 @@ public class Program3 {
                                 if(numReleases <= 0){
                                     System.out.println("Process " + p + " releases " + numReleases + " of resource " + r + ": denied(invalid number)");
                                 }else if(numReleases > currentAllocations[p][r]){
-                                    System.out.println("Process " + p + " releases " + numReleases + " of resource " + r + ": denied(Over capacity)");
+                                    System.out.println("Process " + p + " releases " + numReleases + " of resource " + r + ": denied(Exceeds allocation)");
                                 }else{
                                     allocationPermit.acquire();
                                     currentAllocations[p][r] -= numReleases;
@@ -294,9 +294,87 @@ public class Program3 {
                 }
             }
         }else if(args[0].equals("automatic")){
+            System.out.println("You are in automatic mode");
 
-        }else{
-            System.err.println("Invalid command: " + args[0]);
+            for(int process = 0; process < numProcesses; process++) {
+
+                final int p = process;
+                Thread t = new Thread(() -> {
+
+                    LinkedList<String> generatedCommands = new LinkedList();
+                    //Generate requests
+                    for (int i = 0; i < 3; i++) {
+                        Random random = new Random();
+                        String tag = "request";
+                        int r = random.nextInt(0, numResources);
+                        int units = random.nextInt(1, maxClaims[p][r]);
+                        String command = tag + " " + r + " " + units;
+                        generatedCommands.add(command);
+                    }
+
+                    //Generate release
+                    for (int i = 0; i < 3; i++) {
+                        Random random = new Random();
+                        String tag = "release";
+                        int r = random.nextInt(0, numResources);
+                        int units = random.nextInt(1, maxClaims[p][r] + 1);
+                        String command = tag + " " + r + " " + units;
+                        generatedCommands.add(command);
+                    }
+
+                    while (!generatedCommands.isEmpty()) {
+                        String command[] = generatedCommands.getFirst().split(" ");
+                        String tag = command[0];
+                        int r = Integer.parseInt(command[1]);
+                        int units = Integer.parseInt(command[1]);
+
+                        if(tag.equals("request")){
+
+                            try {
+                                if(units <= maxClaims[p][r] - currentAllocations[p][r] && units <= availableUnits[r]){
+                                    allocationPermit.acquire();
+                                    currentAllocations[p][r] += units;
+                                    availableUnits[r] -= units;
+                                    if(!isSafe(maxClaims, currentAllocations, availableUnits)){ //If not safe deny and revert
+                                        currentAllocations[p][r] -= units;
+                                        availableUnits[r] += units;
+                                        System.out.println("Process " + p + " requests " + units + " of resource " + r + ": denied(unsafe)");
+                                    }else{ //Otherwise is safe
+                                        System.out.println("Process " + p + " requests " + units + " of resource " + r + ": granted");
+                                    }
+                                    allocationPermit.release();
+                                }else{
+                                    System.out.println("Process " + p + " requests " + units + " of resource " + r + ": denied(Over capacity)");
+                                }
+                            } catch (InterruptedException e) {
+                                //Do nothing;
+                            }
+
+                        }else{ //Must be a release command
+                            try {
+                                if(units <= 0){
+                                    System.out.println("Process " + p + " releases " + units + " of resource " + r + ": denied(invalid number)");
+                                }else if(units > currentAllocations[p][r]){
+                                    System.out.println("Process " + p + " releases " + units + " of resource " + r + ": denied(Exceeds allocation)");
+                                }else{
+                                    allocationPermit.acquire();
+                                    currentAllocations[p][r] -= units;
+                                    availableUnits[r] += units;
+                                    System.out.println("Process " + p + " releases " + units + " of resource " + r + ": granted");
+                                    allocationPermit.release();
+                                }
+
+                            } catch (InterruptedException e) {
+                                //Do nothing;
+                            }
+                        }
+                        generatedCommands.removeFirst();
+                    }
+                    return;
+                });
+
+                t.run();
+            }
         }
 
     }
